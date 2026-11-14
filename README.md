@@ -1,16 +1,52 @@
-# React + Vite
+# EcoTrack – Student-Focused E-Waste Marketplace
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**Turning E-Waste into Opportunities for Innovation.**
 
-Currently, two official plugins are available:
+## About the Project
+EcoTrack is a student-focused e-waste marketplace that connects students and researchers with people and recycling centres that have reusable electronic waste.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Students can access affordable components such as:
+- Computer hard disks and SSDs
+- Motherboards
+- RAM modules
+- Batteries
+- Processors and chips
+- Circuit boards and other electronic components
 
-## React Compiler
+These components can be reused for academic projects, research, experimentation, learning and prototyping.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Problem Statement
+Students often struggle to find affordable electronic components for their university projects and research. At the same time, many usable electronic components are discarded as e-waste.
 
-## Expanding the Oxlint configuration
+EcoTrack bridges this gap by connecting e-waste suppliers with students who can give these components a second life.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Key Features
+- User registration and authentication
+- E-waste product listings
+- Browse and search available components
+- Buyer–seller communication
+- Price negotiation
+- Order and delivery workflow
+
+## Technology Stack
+- React.js
+- Vite
+- CSS
+- Supabase
+- PostgreSQL
+
+## Project Team
+- Uday Maheshwary – 1025150029
+- Mohit Kumra – 1025150031
+- Chaitanya Trikha – 1025150030
+
+## Future Scope
+- Student-specific component requests
+- Research and project-based listings
+- Verified component testing
+- Recycling centre partnerships
+- Improved delivery and payment integration
+
+---
+
+**EcoTrack: Reuse. Research. Reinvent.**
