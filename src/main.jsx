@@ -43,6 +43,8 @@ import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
 const demoProducts = [
   {
     id: 1,
+    seller_id: 'demo-seller-1',
+    status: 'available',
     title: 'Lenovo ThinkPad Laptop',
     category: 'Laptops',
     price: 18000,
@@ -57,6 +59,8 @@ const demoProducts = [
   },
   {
     id: 2,
+    seller_id: 'demo-seller-2',
+    status: 'available',
     title: 'Samsung Galaxy S21',
     category: 'Phones',
     price: 14500,
@@ -71,6 +75,8 @@ const demoProducts = [
   },
   {
     id: 3,
+    seller_id: 'demo-seller-3',
+    status: 'available',
     title: 'Dell 24-inch Monitor',
     category: 'Monitors',
     price: 6500,
@@ -85,6 +91,8 @@ const demoProducts = [
   },
   {
     id: 4,
+    seller_id: 'demo-seller-4',
+    status: 'available',
     title: 'Mechanical Keyboard',
     category: 'Accessories',
     price: 1800,
@@ -99,6 +107,8 @@ const demoProducts = [
   },
   {
     id: 5,
+    seller_id: 'demo-seller-5',
+    status: 'available',
     title: 'HP Laser Printer',
     category: 'Printers',
     price: 4200,
@@ -113,6 +123,8 @@ const demoProducts = [
   },
   {
     id: 6,
+    seller_id: 'demo-seller-6',
+    status: 'available',
     title: 'Apple MacBook Air',
     category: 'Laptops',
     price: 42000,
@@ -177,14 +189,19 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-// Storage keys for demo state persistence across browser refreshes
+// Storage keys for demo state persistence across browser refreshes and tabs
 const DEMO_STORAGE_KEY_USER = 'ecotrack_demo_session';
 const DEMO_STORAGE_KEY_ORDERS = 'ecotrack_demo_orders';
 const DEMO_STORAGE_KEY_PRODUCTS = 'ecotrack_demo_products';
 
 function loadStoredDemo(key, fallback) {
   try {
-    const raw = sessionStorage.getItem(key);
+    // For products and orders, check localStorage first so data is shared across tabs, windows, and accounts
+    if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS) {
+      const local = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+      if (local) return JSON.parse(local);
+    }
+    const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(key) : null;
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
@@ -194,12 +211,19 @@ function loadStoredDemo(key, fallback) {
 function saveStoredDemo(key, value) {
   try {
     if (value === null || value === undefined) {
-      sessionStorage.removeItem(key);
+      if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS) {
+        if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
+      }
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(key);
     } else {
-      sessionStorage.setItem(key, JSON.stringify(value));
+      const serialized = JSON.stringify(value);
+      if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS) {
+        if (typeof localStorage !== 'undefined') localStorage.setItem(key, serialized);
+      }
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, serialized);
     }
   } catch {
-    // sessionStorage quota or security restriction in iframe
+    // quota or security restriction fallback
   }
 }
 
@@ -1550,10 +1574,17 @@ function App() {
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [sortBy, setSortBy] = useState('newest');
+  const [viewMode, setViewMode] = useState('marketplace'); // 'marketplace' | 'my_listings'
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState(false);
   const [negotiatingProduct, setNegotiatingProduct] = useState(null);
+
+  // Count listings owned by the currently logged-in user
+  const myListingsCount = useMemo(() => {
+    if (!profile?.id) return 0;
+    return dbProducts.filter((p) => p.seller_id === profile.id || String(p.seller_id) === String(profile.id)).length;
+  }, [dbProducts, profile?.id]);
 
   // Negotiation state
   const [messages, setMessages] = useState(initialMessages);
@@ -1613,7 +1644,7 @@ function App() {
     }
   }, [showAdminDashboard, session, profile]);
 
-  // Restore session, orders, and products in offline/demo mode from sessionStorage
+  // Restore session, orders, and products in offline/demo mode from storage
   useEffect(() => {
     if (!isSupabaseConfigured) {
       const storedUser = loadStoredDemo(DEMO_STORAGE_KEY_USER, null);
@@ -1632,6 +1663,32 @@ function App() {
       if (storedProducts && Array.isArray(storedProducts) && storedProducts.length > 0) {
         setDbProducts(storedProducts);
       }
+    }
+  }, []);
+
+  // Multi-tab synchronization for demo/offline mode
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      const handleStorageChange = (e) => {
+        if (e.key === DEMO_STORAGE_KEY_PRODUCTS && e.newValue) {
+          try {
+            const updated = JSON.parse(e.newValue);
+            if (Array.isArray(updated)) {
+              setDbProducts(updated);
+            }
+          } catch {}
+        }
+        if (e.key === DEMO_STORAGE_KEY_ORDERS && e.newValue) {
+          try {
+            const updatedOrders = JSON.parse(e.newValue);
+            if (Array.isArray(updatedOrders)) {
+              setOrders(updatedOrders);
+            }
+          } catch {}
+        }
+      };
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
     }
   }, []);
 
@@ -1711,20 +1768,32 @@ function App() {
         setDbProducts(stored);
       } else {
         setDbProducts(demoProducts);
+        saveStoredDemo(DEMO_STORAGE_KEY_PRODUCTS, demoProducts);
       }
       setProductsLoading(false);
       return;
     }
 
-    const { data, error } = await supabase
+    let result = await supabase
       .from('products')
-      .select('*, profiles(full_name)')
+      .select('*, profiles:seller_id(full_name)')
       .eq('status', 'available')
       .order('created_at', { ascending: false });
 
+    if (result.error) {
+      result = await supabase
+        .from('products')
+        .select('*, profiles(full_name)')
+        .eq('status', 'available')
+        .order('created_at', { ascending: false });
+    }
+
+    const { data, error } = result;
+
     if (error || !data || data.length === 0) {
       if (error) console.warn('Supabase products query failed, using fallback catalog:', error.message);
-      setDbProducts(demoProducts);
+      const stored = loadStoredDemo(DEMO_STORAGE_KEY_PRODUCTS, null);
+      setDbProducts(stored && stored.length > 0 ? stored : demoProducts);
     } else {
       const normalized = (data || []).map((item) => {
         const presentation = productPresentation(item.category);
@@ -1895,6 +1964,8 @@ function App() {
       setShowAuthModal(false);
       saveStoredDemo(DEMO_STORAGE_KEY_USER, { ...user, profile: mockProfile });
       setNotice(`Signed in as ${mockProfile.full_name} (${mockProfile.role})`);
+      loadProducts();
+      loadOrders();
       return;
     }
 
@@ -1931,6 +2002,8 @@ function App() {
       setViewerRole(existingProfile.role);
     }
     setShowAuthModal(false);
+    loadProducts();
+    loadOrders();
   };
 
   const handleLogout = async () => {
@@ -1945,9 +2018,11 @@ function App() {
       setProfile(null);
       setShowAdminDashboard(false);
       setShowOrdersPanel(false);
+      setViewMode('marketplace');
       setOrders([]);
       setViewerRole('buyer');
       setNotice('Logged out successfully.');
+      loadProducts();
     } catch (err) {
       setGlobalError(err.message || 'Error signing out.');
     }
@@ -1955,8 +2030,20 @@ function App() {
 
   const filteredProducts = useMemo(() => {
     const list = dbProducts.filter((product) => {
+      // If My Listings view is active, filter strictly to this seller's products
+      if (viewMode === 'my_listings') {
+        const isOwner = profile?.id && (product.seller_id === profile.id || String(product.seller_id) === String(profile.id));
+        if (!isOwner) return false;
+      } else {
+        // Public marketplace: show all available/active listings across all sellers.
+        // If a listing has a draft/inactive status, only its own creator may see it.
+        const isOwner = profile?.id && (product.seller_id === profile.id || String(product.seller_id) === String(profile.id));
+        const isAvailable = !product.status || product.status === 'available';
+        if (!isAvailable && !isOwner) return false;
+      }
+
       const matchesCategory =
-        category === 'All' || product.category === category;
+        viewMode === 'my_listings' || category === 'All' || product.category === category;
 
       const text = `${product.title || ''} ${product.location || ''} ${product.category || ''} ${product.seller || ''}`
         .toLowerCase();
@@ -1965,13 +2052,13 @@ function App() {
     });
 
     if (sortBy === 'price_asc') {
-      return [...list].sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+      return [...list].sort((a, b) => (Number(a.price) || 0) - (Number(a.price) || 0));
     }
     if (sortBy === 'price_desc') {
       return [...list].sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
     }
     return list;
-  }, [dbProducts, query, category, sortBy]);
+  }, [dbProducts, query, category, sortBy, viewMode, profile?.id]);
 
   const toggleLike = useCallback((id) => {
     setLiked((current) =>
@@ -2008,11 +2095,11 @@ function App() {
 
   const startNegotiation = (product) => {
     closeDetails();
+    if (session?.user && (product.seller_id === session.user.id || String(product.seller_id) === String(session.user.id) || (profile?.id && (product.seller_id === profile.id || String(product.seller_id) === String(profile.id))))) {
+      setGlobalError('You cannot negotiate on your own listing.');
+      return;
+    }
     if (isSupabaseConfigured && session?.user) {
-      if (product.seller_id === session.user.id) {
-        setGlobalError('You cannot negotiate on your own listing.');
-        return;
-      }
       setMessagesStartProduct(product);
       setShowMessagesCenter(true);
     } else {
@@ -2316,6 +2403,20 @@ function App() {
             <Plus size={17} />
             Sell an item
           </button>
+          {session && (profile?.role === 'seller' || viewerRole === 'seller' || myListingsCount > 0) && (
+            <button
+              className={`seller-nav-button ${viewMode === 'my_listings' ? 'active' : ''}`}
+              type="button"
+              onClick={() => {
+                setMobileOpen(false);
+                setViewMode(current => current === 'my_listings' ? 'marketplace' : 'my_listings');
+              }}
+              aria-label="View your listings"
+            >
+              <Package size={17} />
+              {viewMode === 'my_listings' ? 'Marketplace' : `My Listings (${myListingsCount})`}
+            </button>
+          )}
           {session && profile?.role === 'admin' && (
             <button
               className="admin-nav-button"
@@ -2380,19 +2481,39 @@ function App() {
         <section className="market-section" id="marketplace">
           <div className="section-heading">
             <div>
-              <div className="section-kicker">DISCOVER & REUSE</div>
+              <div className="section-kicker">
+                {viewMode === 'my_listings' ? 'SELLER DASHBOARD' : 'DISCOVER & REUSE'}
+              </div>
               <h2>
-                Find your next <span>tech treasure.</span>
+                {viewMode === 'my_listings' ? (
+                  <>My <span>Listings</span></>
+                ) : (
+                  <>Find your next <span>tech treasure.</span></>
+                )}
               </h2>
               <p>
-                Explore pre-owned electronics from people in your community.
+                {viewMode === 'my_listings'
+                  ? 'Manage your active listings, inspect inquiries, or edit details.'
+                  : 'Explore pre-owned electronics from people in your community.'}
               </p>
             </div>
 
-            <a href="#marketplace" className="text-link">
-              View all listings
-              <ArrowRight size={17} />
-            </a>
+            {viewMode === 'my_listings' ? (
+              <button
+                type="button"
+                className="primary-button"
+                style={{ fontSize: 13, padding: '9px 16px' }}
+                onClick={handleSellClick}
+              >
+                <Plus size={16} />
+                + Create New Listing
+              </button>
+            ) : (
+              <a href="#marketplace" className="text-link">
+                View all listings
+                <ArrowRight size={17} />
+              </a>
+            )}
           </div>
 
           <div className="search-row">
@@ -2410,13 +2531,27 @@ function App() {
                 <button
                   key={item}
                   className={
-                    category === item ? 'category active' : 'category'
+                    viewMode === 'marketplace' && category === item ? 'category active' : 'category'
                   }
-                  onClick={() => setCategory(item)}
+                  onClick={() => {
+                    setViewMode('marketplace');
+                    setCategory(item);
+                  }}
                 >
                   {item}
                 </button>
               ))}
+
+              {session && (profile?.role === 'seller' || viewerRole === 'seller' || myListingsCount > 0) && (
+                <button
+                  type="button"
+                  className={viewMode === 'my_listings' ? 'category active' : 'category'}
+                  style={viewMode === 'my_listings' ? { background: '#166534', borderColor: '#166534', color: '#fff' } : {}}
+                  onClick={() => setViewMode(viewMode === 'my_listings' ? 'marketplace' : 'my_listings')}
+                >
+                  📦 My Listings ({myListingsCount})
+                </button>
+              )}
             </div>
 
             <div className="sort-box">
@@ -2451,7 +2586,22 @@ function App() {
 
           {!productsLoading && filteredProducts.length === 0 && (
             <div className="empty-state">
-              No live listings match your search. Sellers can add the first listing using "Sell an item".
+              {viewMode === 'my_listings' ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <Package size={44} style={{ margin: '0 auto 10px', opacity: 0.35, display: 'block' }} />
+                  <p style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+                    You haven't listed any items yet.
+                  </p>
+                  <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b', maxWidth: 400, marginLeft: 'auto', marginRight: 'auto' }}>
+                    Start selling your unused electronics to earn money and promote sustainable recycling in your community!
+                  </p>
+                  <button className="primary-button" style={{ margin: '0 auto', fontSize: 13 }} onClick={handleSellClick}>
+                    <Plus size={16} /> List Your First Item
+                  </button>
+                </div>
+              ) : (
+                'No live listings match your search. Sellers can add the first listing using "Sell an item".'
+              )}
             </div>
           )}
         </section>
@@ -2521,8 +2671,8 @@ function App() {
                   {selectedProduct.description}
                 </p>
 
-                {/* Buyer action: Start Negotiation */}
-                {(!session || !profile || selectedProduct.seller_id !== profile.id) ? (
+                {/* Buyer action: Start Negotiation (shown for other users' listings) */}
+                {(!session || !profile || (selectedProduct.seller_id !== profile.id && String(selectedProduct.seller_id) !== String(profile.id))) ? (
                   <button
                     className="primary-button modal-action"
                     onClick={() => startNegotiation(selectedProduct)}
@@ -2533,6 +2683,9 @@ function App() {
                 ) : (
                   /* Seller controls for own listing: Edit and Delete */
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#166534', fontWeight: 600, padding: '4px 8px', background: '#f0fdf4', borderRadius: 8, alignSelf: 'flex-start' }}>
+                      <CheckCircle size={15} /> Your listing
+                    </div>
                     <button
                       className="primary-button modal-action"
                       onClick={() => {

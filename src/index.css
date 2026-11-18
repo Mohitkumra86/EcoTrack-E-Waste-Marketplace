@@ -184,6 +184,30 @@ img {
   background: #f7fbf8;
 }
 
+.seller-nav-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border-radius: 10px;
+  color: #166534;
+  font-size: 14px;
+  font-weight: 650;
+  transition: 0.2s ease;
+  cursor: pointer;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.seller-nav-button:hover,
+.seller-nav-button.active {
+  color: white;
+  background: #166534;
+  border-color: #166534;
+}
+
 .login-button {
   color: white;
   background: var(--text);
