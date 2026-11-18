@@ -173,6 +173,20 @@ create index if not exists idx_orders_seller on public.orders(seller_id);
 create index if not exists idx_orders_status on public.orders(status);
 
 -- ------------------------------------------------------------------------------
+-- 7. FAVORITES / SAVED LISTINGS TABLE
+-- ------------------------------------------------------------------------------
+create table if not exists public.favorites (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  product_id bigint references public.products(id) on delete cascade not null,
+  created_at timestamptz not null default now(),
+  constraint uq_user_product_favorite unique (user_id, product_id)
+);
+
+create index if not exists idx_favorites_user on public.favorites(user_id);
+create index if not exists idx_favorites_product on public.favorites(product_id);
+
+-- ------------------------------------------------------------------------------
 -- 7. ATOMIC TRANSACTION RPC: RESPOND TO PRICE OFFER
 -- ------------------------------------------------------------------------------
 create or replace function public.respond_to_price_offer(
@@ -464,6 +478,21 @@ create policy "Sellers can update order shipment status"
     (auth.uid() = seller_id and status in ('shipped', 'delivered')) or
     exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
   );
+
+-- Favorites / saved listings policies
+alter table public.favorites enable row level security;
+
+create policy "Users can view their own favorites"
+  on public.favorites for select
+  using (auth.uid() = user_id);
+
+create policy "Users can add their own favorites"
+  on public.favorites for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete their own favorites"
+  on public.favorites for delete
+  using (auth.uid() = user_id);
 
 -- Storage bucket for product images
 insert into storage.buckets (id, name, public)

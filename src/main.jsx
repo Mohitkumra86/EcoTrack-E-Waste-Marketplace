@@ -38,7 +38,7 @@ import {
   ShoppingCart
 } from 'lucide-react';
 import './index.css';
-import { supabase, isSupabaseConfigured } from './lib/supabaseClient';
+import { supabase, isSupabaseConfigured, getMissingSupabaseConfig } from './lib/supabaseClient';
 
 const demoProducts = [
   {
@@ -193,11 +193,12 @@ function clamp(value, min, max) {
 const DEMO_STORAGE_KEY_USER = 'ecotrack_demo_session';
 const DEMO_STORAGE_KEY_ORDERS = 'ecotrack_demo_orders';
 const DEMO_STORAGE_KEY_PRODUCTS = 'ecotrack_demo_products';
+const DEMO_STORAGE_KEY_LIKES = 'ecotrack_demo_likes';
 
 function loadStoredDemo(key, fallback) {
   try {
-    // For products and orders, check localStorage first so data is shared across tabs, windows, and accounts
-    if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS) {
+    // For products, orders, and likes, check localStorage first so data is shared across tabs, windows, and accounts
+    if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS || key.startsWith(DEMO_STORAGE_KEY_LIKES)) {
       const local = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
       if (local) return JSON.parse(local);
     }
@@ -211,13 +212,13 @@ function loadStoredDemo(key, fallback) {
 function saveStoredDemo(key, value) {
   try {
     if (value === null || value === undefined) {
-      if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS) {
+      if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS || key.startsWith(DEMO_STORAGE_KEY_LIKES)) {
         if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
       }
       if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(key);
     } else {
       const serialized = JSON.stringify(value);
-      if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS) {
+      if (key === DEMO_STORAGE_KEY_PRODUCTS || key === DEMO_STORAGE_KEY_ORDERS || key.startsWith(DEMO_STORAGE_KEY_LIKES)) {
         if (typeof localStorage !== 'undefined') localStorage.setItem(key, serialized);
       }
       if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, serialized);
@@ -2060,13 +2061,63 @@ function App() {
     return list;
   }, [dbProducts, query, category, sortBy, viewMode, profile?.id]);
 
-  const toggleLike = useCallback((id) => {
-    setLiked((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id]
-    );
+  const loadLikes = useCallback(async (userId) => {
+    if (isSupabaseConfigured && userId) {
+      try {
+        const { data, error } = await supabase
+          .from('favorites')
+          .select('product_id')
+          .eq('user_id', userId);
+        if (!error && data) {
+          const ids = data.map(item => item.product_id);
+          setLiked(ids);
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not load favorites from Supabase:', err);
+      }
+    }
+    const storageKey = `${DEMO_STORAGE_KEY_LIKES}_${userId || 'guest'}`;
+    const stored = loadStoredDemo(storageKey, []);
+    if (Array.isArray(stored)) {
+      setLiked(stored);
+    }
   }, []);
+
+  useEffect(() => {
+    loadLikes(session?.user?.id);
+  }, [session?.user?.id, loadLikes]);
+
+  const toggleLike = useCallback(async (id) => {
+    const isCurrentlyLiked = liked.includes(id);
+    const newLiked = isCurrentlyLiked
+      ? liked.filter((item) => item !== id)
+      : [...liked, id];
+
+    setLiked(newLiked);
+
+    const userId = session?.user?.id;
+    const storageKey = `${DEMO_STORAGE_KEY_LIKES}_${userId || 'guest'}`;
+    saveStoredDemo(storageKey, newLiked);
+
+    if (isSupabaseConfigured && userId) {
+      try {
+        if (isCurrentlyLiked) {
+          await supabase
+            .from('favorites')
+            .delete()
+            .eq('user_id', userId)
+            .eq('product_id', id);
+        } else {
+          await supabase
+            .from('favorites')
+            .insert({ user_id: userId, product_id: id });
+        }
+      } catch (err) {
+        console.warn('Could not sync favorite to Supabase:', err);
+      }
+    }
+  }, [liked, session?.user?.id]);
 
   const closeDetails = () => {
     setSelectedProduct(null);
@@ -2452,7 +2503,9 @@ function App() {
 
       {!isSupabaseConfigured && (
         <div className="demo-banner">
-          <span>⚡ <strong>Interactive Preview Mode:</strong> Running with local demo catalog &amp; in-memory simulation. Add credentials to <code>.env.local</code> to connect live Supabase backend.</span>
+          <span>
+            ⚡ <strong>Interactive Preview Mode:</strong> Running in local offline mode. Supabase credentials missing (<code>{getMissingSupabaseConfig().join(', ')}</code>). Add them to <code>.env.local</code> to activate your live Supabase backend.
+          </span>
         </div>
       )}
 
