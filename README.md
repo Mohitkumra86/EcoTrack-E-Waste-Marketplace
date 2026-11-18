@@ -37,6 +37,7 @@ EcoTrack bridges this gap by connecting e-waste suppliers with students who can 
   - Server-side price validation against accepted offers to eliminate client-side price tampering.
   - Clamped delivery fee calculation (capped at ₹5,000) and ₹11 platform fee.
   - Dedicated "My Orders" tracking panel with buyer delivery approval.
+  - Full in-memory and sessionStorage persistence for offline / preview testing.
 - **Admin Control Center**:
   - Restricted to verified admin accounts.
   - Platform overview metrics, listing moderation, user management, and order monitoring.

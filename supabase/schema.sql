@@ -290,6 +290,18 @@ begin
     end if;
 
     v_product_price := v_offer.amount;
+  elsif p_agreed_price is not null then
+    -- Verify against accepted conversation final_price or listed asking price
+    select * into v_conv from public.conversations
+    where product_id = p_product_id and buyer_id = v_buyer_id and final_price = p_agreed_price;
+
+    if found then
+      v_product_price := p_agreed_price;
+    elsif p_agreed_price = v_product.price then
+      v_product_price := v_product.price;
+    else
+      raise exception 'Agreed price mismatch with listed or negotiated price';
+    end if;
   else
     -- When buying directly without an offer, price must be the listed asking price
     v_product_price := v_product.price;

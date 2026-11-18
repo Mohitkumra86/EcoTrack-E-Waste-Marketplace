@@ -7,6 +7,7 @@ import {
   Plus,
   Heart,
   ArrowRight,
+  ArrowLeft,
   Recycle,
   ShieldCheck,
   Truck,
@@ -175,6 +176,309 @@ function sanitizeText(str) {
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
+
+// Storage keys for demo state persistence across browser refreshes
+const DEMO_STORAGE_KEY_USER = 'ecotrack_demo_session';
+const DEMO_STORAGE_KEY_ORDERS = 'ecotrack_demo_orders';
+const DEMO_STORAGE_KEY_PRODUCTS = 'ecotrack_demo_products';
+
+function loadStoredDemo(key, fallback) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveStoredDemo(key, value) {
+  try {
+    if (value === null || value === undefined) {
+      sessionStorage.removeItem(key);
+    } else {
+      sessionStorage.setItem(key, JSON.stringify(value));
+    }
+  } catch {
+    // sessionStorage quota or security restriction in iframe
+  }
+}
+
+/** Memoized Product Card to prevent unnecessary re-renders on keystroke/filter */
+const ProductCard = React.memo(function ProductCard({ product, isLiked, onToggleLike, onSelect }) {
+  return (
+    <article className="product-card">
+      <div className={`product-visual ${product.color || 'blue'}`}>
+        <span className="condition-tag">{product.condition}</span>
+
+        <button
+          className="like-button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleLike(product.id);
+          }}
+          aria-label="Save listing"
+        >
+          <Heart
+            size={18}
+            fill={isLiked ? 'currentColor' : 'none'}
+          />
+        </button>
+
+        <div className="product-icon">{product.icon}</div>
+      </div>
+
+      <div className="product-content">
+        <div className="product-category">{product.category}</div>
+        <h3>{product.title}</h3>
+
+        <div className="product-meta">
+          <MapPin size={14} />
+          {product.location}
+        </div>
+
+        <div className="product-bottom">
+          <div>
+            <strong>{formatPrice(product.price)}</strong>
+            <small>Seller: {product.seller}</small>
+          </div>
+
+          <button
+            className="chat-button"
+            onClick={() => onSelect(product)}
+          >
+            View Details
+            <ArrowRight size={17} />
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+});
+
+/** Memoized Hero Section */
+const HeroSection = React.memo(function HeroSection({ onSellClick }) {
+  return (
+    <section className="hero">
+      <div className="hero-copy">
+        <div className="eyebrow">
+          <span className="eyebrow-dot" />
+          A smarter way to give tech a second life
+        </div>
+
+        <h1>
+          Give your old tech
+          <br />
+          <span>
+            a new <em>purpose.</em>
+          </span>
+        </h1>
+
+        <p>
+          Buy, sell, and reuse electronics with people around you.
+          EcoTrack makes responsible e-waste exchange simple,
+          transparent, and rewarding.
+        </p>
+
+        <div className="hero-actions">
+          <a href="#marketplace" className="primary-button">
+            Explore marketplace
+            <ArrowRight size={18} />
+          </a>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onSellClick}
+          >
+            <Plus size={18} />
+            List your e-waste
+          </button>
+        </div>
+
+        <div className="trust-row">
+          <div className="avatars">
+            <span>R</span>
+            <span>A</span>
+            <span>N</span>
+            <span>+</span>
+          </div>
+          <div>
+            <strong>Built for conscious communities</strong>
+            <small>Reuse more. Waste less.</small>
+          </div>
+        </div>
+      </div>
+
+      <div className="hero-art">
+        <div className="orbit orbit-one" />
+        <div className="orbit orbit-two" />
+
+        <div className="device-card laptop-card">
+          <div className="device-top">
+            <span className="tiny-label">FEATURED DROP</span>
+            <span className="status-pill">● Available</span>
+          </div>
+          <div className="device-emoji">💻</div>
+          <div className="device-info">
+            <h3>MacBook Air M1</h3>
+            <p>8GB RAM · 256GB SSD</p>
+            <div>
+              <strong>₹42,000</strong>
+              <span>Good condition</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="floating-card impact-card">
+          <span className="floating-icon">♻</span>
+          <div>
+            <strong>2,480+</strong>
+            <small>Devices recirculated</small>
+          </div>
+        </div>
+
+        <div className="floating-card location-card">
+          <MapPin size={17} />
+          <div>
+            <strong>Find nearby</strong>
+            <small>Trusted local sellers</small>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+});
+
+/** Memoized Stats Strip */
+const StatsSection = React.memo(function StatsSection() {
+  return (
+    <section className="stats-strip" id="impact">
+      <div>
+        <strong>100%</strong>
+        <span>Community-driven</span>
+      </div>
+      <div>
+        <strong>6+</strong>
+        <span>Device categories</span>
+      </div>
+      <div>
+        <strong>₹11</strong>
+        <span>Simple platform fee</span>
+      </div>
+      <div>
+        <strong>1 goal</strong>
+        <span>Less e-waste</span>
+      </div>
+    </section>
+  );
+});
+
+/** Memoized How It Works Section */
+const HowItWorksSection = React.memo(function HowItWorksSection() {
+  return (
+    <section className="how-section" id="how-it-works">
+      <div className="section-kicker">SIMPLE BY DESIGN</div>
+      <h2>
+        From unused to <span>useful.</span>
+      </h2>
+      <p className="section-intro">
+        A straightforward way to keep electronics in use for longer.
+      </p>
+
+      <div className="steps">
+        <div className="step">
+          <div className="step-icon">
+            <Plus />
+          </div>
+          <span>01</span>
+          <h3>List your device</h3>
+          <p>Add photos, specs, condition, and your asking price.</p>
+        </div>
+
+        <div className="step">
+          <div className="step-icon">
+            <MessageCircle />
+          </div>
+          <span>02</span>
+          <h3>Connect & agree</h3>
+          <p>Chat with interested buyers and finalize the deal.</p>
+        </div>
+
+        <div className="step">
+          <div className="step-icon">
+            <Truck />
+          </div>
+          <span>03</span>
+          <h3>We manage delivery</h3>
+          <p>Pay securely and track the delivery through EcoTrack.</p>
+        </div>
+
+        <div className="step">
+          <div className="step-icon">
+            <ShieldCheck />
+          </div>
+          <span>04</span>
+          <h3>Verify & complete</h3>
+          <p>Approve the product after delivery and release the seller payout.</p>
+        </div>
+      </div>
+    </section>
+  );
+});
+
+/** Memoized Sell Banner Section */
+const SellBannerSection = React.memo(function SellBannerSection({ onSellClick }) {
+  return (
+    <section className="sell-banner" id="sell">
+      <div>
+        <div className="section-kicker">HAVE UNUSED TECH?</div>
+        <h2>
+          Someone out there
+          <br />
+          needs what you have.
+        </h2>
+        <p>
+          Turn your unused electronics into value while helping reduce
+          e-waste.
+        </p>
+      </div>
+
+      <button
+        className="primary-button"
+        type="button"
+        onClick={onSellClick}
+      >
+        Start selling
+        <ArrowRight size={18} />
+      </button>
+    </section>
+  );
+});
+
+/** Memoized Footer Section */
+const FooterSection = React.memo(function FooterSection() {
+  return (
+    <footer>
+      <div className="footer-top">
+        <a className="brand" href="#top">
+          <span className="brand-mark">
+            <Recycle size={20} />
+          </span>
+          <span>
+            Eco<span className="brand-accent">Track</span>
+          </span>
+        </a>
+        <nav className="footer-links">
+          <a href="#marketplace">Marketplace</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#impact">Impact</a>
+          <a href="#sell">Sell</a>
+        </nav>
+      </div>
+      <p>Building a more circular future, one device at a time.</p>
+      <span>© 2026 EcoTrack · Sustainable Electronics Marketplace</span>
+    </footer>
+  );
+});
 
 function AdminDashboard({ onBack }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -1010,7 +1314,7 @@ function ListingModal({ profile, onClose, onCreated, editingProduct = null }) {
 }
 
 
-function MessagesCenter({ user, profile, initialProduct, onClose }) {
+function MessagesCenter({ user, profile, initialProduct, onClose, onProceedToCheckout }) {
   const [conversations, setConversations] = useState([]);
   const [active, setActive] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -1145,9 +1449,37 @@ function MessagesCenter({ user, profile, initialProduct, onClose }) {
   const product = active ? products[active.product_id] : null;
   const fmt = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
-  return <div className="messages-overlay">
-    <section className="messages-center">
-      <header className="messages-topbar"><div><span className="messages-kicker">ECOTRACK CONNECT</span><h2><MessageCircle size={22}/> Messages</h2></div><button className="chat-close" onClick={onClose} aria-label="Close messages"><X/></button></header>
+  return (
+    <div className="messages-overlay" onClick={onClose}>
+      <section className="messages-center" onClick={(e) => e.stopPropagation()}>
+        <header className="messages-topbar">
+          <div>
+            <span className="messages-kicker">ECOTRACK CONNECT</span>
+            <h2><MessageCircle size={22}/> Messages</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close Messages"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '9px 18px',
+              borderRadius: '12px',
+              border: '1.5px solid #cbd5e1',
+              background: '#f1f5f9',
+              color: '#1e293b',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <ArrowLeft size={16} />
+            Back
+          </button>
+        </header>
       {error && <div className="messages-error">{error}</div>}
       <div className="messages-layout">
         <aside className="messages-inbox"><div className="inbox-heading"><strong>Your conversations</strong><button onClick={loadInbox}>Refresh</button></div>
@@ -1165,7 +1497,24 @@ function MessagesCenter({ user, profile, initialProduct, onClose }) {
                 {o.status === 'pending' && o.sender_id === user.id && <small>Waiting for the other participant.</small>}
                 {o.status === 'countered' && o.sender_id !== user.id && <div className="offer-controls"><button onClick={() => respondOffer(o, 'accept')} disabled={busy}>Accept counter</button><button className="decline" onClick={() => respondOffer(o, 'reject')} disabled={busy}>Reject</button></div>}
               </div>)}
-              {active.final_price && <div className="deal-finalized">Deal agreed at {fmt(active.final_price)}. Continue to the payment stage.</div>}
+              {active.final_price && (
+                <div className="deal-finalized" style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+                  <span>Deal agreed at {fmt(active.final_price)}!</span>
+                  {active.buyer_id === user.id && onProceedToCheckout && product && (
+                    <button
+                      type="button"
+                      className="primary-button"
+                      style={{ padding: '8px 16px', fontSize: 13 }}
+                      onClick={() => {
+                        onClose();
+                        onProceedToCheckout(product, active.final_price);
+                      }}
+                    >
+                      Proceed to Escrow Checkout →
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="messages-composer"><input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendText()} placeholder="Write a message…"/><button onClick={sendText} disabled={busy || !draft.trim()}><Send size={17}/> Send</button></div>
             <div className="offer-composer"><span>Make a price offer</span><input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount in ₹"/><button onClick={submitOffer} disabled={busy || !amount}>Send offer</button></div>
@@ -1173,7 +1522,8 @@ function MessagesCenter({ user, profile, initialProduct, onClose }) {
         </section>
       </div>
     </section>
-  </div>;
+    </div>
+  );
 }
 
 
@@ -1202,12 +1552,14 @@ function App() {
   const [sortBy, setSortBy] = useState('newest');
 
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [confirmDeleteProduct, setConfirmDeleteProduct] = useState(false);
   const [negotiatingProduct, setNegotiatingProduct] = useState(null);
 
   // Negotiation state
   const [messages, setMessages] = useState(initialMessages);
   const [messageText, setMessageText] = useState('');
   const [offerAmount, setOfferAmount] = useState('');
+  const [sellerCounterAmount, setSellerCounterAmount] = useState('');
   const [currentOffer, setCurrentOffer] = useState(null);
   const [negotiationStatus, setNegotiationStatus] = useState('ongoing');
   const [finalPrice, setFinalPrice] = useState(null);
@@ -1215,6 +1567,73 @@ function App() {
   const [viewerRole, setViewerRole] = useState('buyer');
 
   const [deliveryFee, setDeliveryFee] = useState(200);
+
+  // Auto-dismiss notices after 4 seconds
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => {
+      setNotice('');
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  // Auto-dismiss errors after 6 seconds
+  useEffect(() => {
+    if (!globalError) return;
+    const timer = setTimeout(() => {
+      setGlobalError('');
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [globalError]);
+
+  // Close active modals on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowOrdersPanel(false);
+        setShowMessagesCenter(false);
+        setMessagesStartProduct(null);
+        setSelectedProduct(null);
+        setConfirmDeleteProduct(false);
+        setNegotiatingProduct(null);
+        setShowPaymentPreview(false);
+        setShowListingModal(false);
+        setShowAuthModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Guard against unauthorized admin access without setState during render
+  useEffect(() => {
+    if (showAdminDashboard && (!session || !profile || profile.role !== 'admin')) {
+      setShowAdminDashboard(false);
+      setGlobalError('Admin privileges required to access the dashboard.');
+    }
+  }, [showAdminDashboard, session, profile]);
+
+  // Restore session, orders, and products in offline/demo mode from sessionStorage
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      const storedUser = loadStoredDemo(DEMO_STORAGE_KEY_USER, null);
+      if (storedUser) {
+        setSession({ user: storedUser });
+        setProfile(storedUser.profile || null);
+        if (storedUser.profile?.role) {
+          setViewerRole(storedUser.profile.role);
+        }
+      }
+      const storedOrders = loadStoredDemo(DEMO_STORAGE_KEY_ORDERS, null);
+      if (storedOrders && Array.isArray(storedOrders) && storedOrders.length > 0) {
+        setOrders(storedOrders);
+      }
+      const storedProducts = loadStoredDemo(DEMO_STORAGE_KEY_PRODUCTS, null);
+      if (storedProducts && Array.isArray(storedProducts) && storedProducts.length > 0) {
+        setDbProducts(storedProducts);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -1247,26 +1666,34 @@ function App() {
       }
     };
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      setSession(data?.session ?? null);
-      if (data?.session?.user) await loadProfile(data.session.user);
-      if (mounted) setAuthLoading(false);
-    }).catch((err) => {
-      console.warn('Session check fallback:', err);
-      if (mounted) setAuthLoading(false);
-    });
+    if (isSupabaseConfigured) {
+      supabase.auth.getSession().then(async ({ data }) => {
+        if (!mounted) return;
+        setSession(data?.session ?? null);
+        if (data?.session?.user) await loadProfile(data.session.user);
+        if (mounted) setAuthLoading(false);
+      }).catch((err) => {
+        console.warn('Session check fallback:', err);
+        if (mounted) setAuthLoading(false);
+      });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      if (!mounted) return;
-      setSession(nextSession);
-      await loadProfile(nextSession?.user ?? null);
+      const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+        if (!mounted) return;
+        setSession(nextSession);
+        await loadProfile(nextSession?.user ?? null);
+        setAuthLoading(false);
+      });
+
+      return () => {
+        mounted = false;
+        listener?.subscription?.unsubscribe?.();
+      };
+    } else {
       setAuthLoading(false);
-    });
+    }
 
     return () => {
       mounted = false;
-      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -1279,7 +1706,12 @@ function App() {
   const loadProducts = async () => {
     setProductsLoading(true);
     if (!isSupabaseConfigured) {
-      setDbProducts(demoProducts);
+      const stored = loadStoredDemo(DEMO_STORAGE_KEY_PRODUCTS, null);
+      if (stored && Array.isArray(stored) && stored.length > 0) {
+        setDbProducts(stored);
+      } else {
+        setDbProducts(demoProducts);
+      }
       setProductsLoading(false);
       return;
     }
@@ -1338,9 +1770,36 @@ function App() {
   /** Create an escrow order using the server-side RPC (prevents race conditions) */
   const createEscrowOrder = async (product, agreedPrice, currentDeliveryFee) => {
     if (!isSupabaseConfigured) {
-      // Demo mode: simulate order placement
+      // Demo mode: simulate order placement with persistent state
+      const demoOrder = {
+        id: 'demo-ord-' + Date.now(),
+        order_number: 'ET-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+        product_id: product.id,
+        buyer_id: session?.user?.id || 'demo-buyer-1',
+        seller_id: product.seller_id || 'demo-seller-1',
+        product_price: agreedPrice,
+        delivery_fee: currentDeliveryFee,
+        platform_fee: 11,
+        total_paid: agreedPrice + (currentDeliveryFee / 2) + 11,
+        seller_payout: Math.max(0, agreedPrice - (currentDeliveryFee / 2) - 11),
+        status: 'escrow_held',
+        buyer_approved: false,
+        delivery_address: profile?.location || 'Patiala, Punjab',
+        created_at: new Date().toISOString(),
+        products: { title: product.title, category: product.category }
+      };
+      setOrders(prev => {
+        const updated = [demoOrder, ...prev];
+        saveStoredDemo(DEMO_STORAGE_KEY_ORDERS, updated);
+        return updated;
+      });
+      setDbProducts(prev => {
+        const updated = prev.map(p => p.id === product.id ? { ...p, status: 'reserved' } : p);
+        saveStoredDemo(DEMO_STORAGE_KEY_PRODUCTS, updated);
+        return updated;
+      });
       setPaymentDone(true);
-      setNotice('Order initiated! Product marked for delivery escrow. (Demo mode — no real payment)');
+      setNotice(`Order ${demoOrder.order_number} confirmed! ${formatPrice(demoOrder.total_paid)} secured in escrow. Track it under Orders.`);
       return;
     }
     if (!session?.user) {
@@ -1368,7 +1827,11 @@ function App() {
   /** Delete a product listing (seller only) */
   const deleteProduct = async (productId) => {
     if (!isSupabaseConfigured) {
-      setDbProducts(current => current.filter(p => p.id !== productId));
+      setDbProducts(current => {
+        const updated = current.filter(p => p.id !== productId);
+        saveStoredDemo(DEMO_STORAGE_KEY_PRODUCTS, updated);
+        return updated;
+      });
       setNotice('Listing removed. (Demo mode)');
       return;
     }
@@ -1388,7 +1851,16 @@ function App() {
 
   /** Mark order as buyer-approved upon delivery receipt */
   const markBuyerApproved = async (order) => {
-    if (!isSupabaseConfigured || !session?.user) return;
+    if (!isSupabaseConfigured) {
+      setOrders(prev => {
+        const updated = prev.map(o => o.id === order.id ? { ...o, buyer_approved: true, status: 'approved' } : o);
+        saveStoredDemo(DEMO_STORAGE_KEY_ORDERS, updated);
+        return updated;
+      });
+      setNotice('Delivery approved! Seller payout released from escrow. (Demo mode)');
+      return;
+    }
+    if (!session?.user) return;
     if (order.buyer_id !== session.user.id) {
       setGlobalError('Only the buyer can approve a delivery.');
       return;
@@ -1421,6 +1893,7 @@ function App() {
       setSession({ user });
       setViewerRole(mockProfile.role);
       setShowAuthModal(false);
+      saveStoredDemo(DEMO_STORAGE_KEY_USER, { ...user, profile: mockProfile });
       setNotice(`Signed in as ${mockProfile.full_name} (${mockProfile.role})`);
       return;
     }
@@ -1465,6 +1938,8 @@ function App() {
       if (isSupabaseConfigured) {
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
+      } else {
+        saveStoredDemo(DEMO_STORAGE_KEY_USER, null);
       }
       setSession(null);
       setProfile(null);
@@ -1498,22 +1973,32 @@ function App() {
     return list;
   }, [dbProducts, query, category, sortBy]);
 
-  const toggleLike = (id) => {
+  const toggleLike = useCallback((id) => {
     setLiked((current) =>
       current.includes(id)
         ? current.filter((item) => item !== id)
         : [...current, id]
     );
-  };
+  }, []);
 
   const closeDetails = () => {
     setSelectedProduct(null);
+    setConfirmDeleteProduct(false);
+  };
+
+  const handleProceedToCheckout = (product, agreedPrice) => {
+    setNegotiatingProduct(product);
+    setFinalPrice(agreedPrice);
+    setNegotiationStatus('accepted');
+    setShowPaymentPreview(true);
+    setPaymentDone(false);
   };
 
   const resetNegotiation = () => {
     setMessages(initialMessages);
     setMessageText('');
     setOfferAmount('');
+    setSellerCounterAmount('');
     setCurrentOffer(null);
     setNegotiationStatus('ongoing');
     setFinalPrice(null);
@@ -1680,6 +2165,46 @@ function App() {
     ]);
   };
 
+  const sendSellerCounter = () => {
+    if (viewerRole !== 'seller') {
+      setGlobalError('Switch to "Seller" view above to make a counteroffer.');
+      return;
+    }
+
+    const amount = Number(sellerCounterAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setGlobalError('Please enter a valid counteroffer amount (greater than ₹0).');
+      return;
+    }
+
+    if (!negotiatingProduct) return;
+
+    const newOffer = {
+      id: Date.now(),
+      sender: 'seller',
+      amount,
+      status: 'countered'
+    };
+
+    setCurrentOffer(newOffer);
+    setMessages((current) => [
+      ...current,
+      {
+        id: Date.now() + 1,
+        sender: 'seller',
+        type: 'offer',
+        amount,
+        time: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      }
+    ]);
+    setSellerCounterAmount('');
+    setNotice(`Counteroffer of ${formatPrice(amount)} sent to buyer.`);
+  };
+
   const acceptCounterOffer = () => {
     if (!currentOffer) return;
 
@@ -1729,12 +2254,8 @@ function App() {
   }
 
   // Show the admin dashboard as a separate full-screen view.
-  // Guard: only admin-role profiles may access this.
-  if (showAdminDashboard) {
-    if (!session || !profile || profile.role !== 'admin') {
-      setShowAdminDashboard(false);
-      return null;
-    }
+  // Guard is safely handled via useEffect to avoid setState-during-render.
+  if (showAdminDashboard && session && profile?.role === 'admin') {
     return (
       <AdminDashboard
         onBack={() => setShowAdminDashboard(false)}
@@ -1850,113 +2371,10 @@ function App() {
 
       <main id="top">
         {/* HERO */}
-        <section className="hero">
-          <div className="hero-copy">
-            <div className="eyebrow">
-              <span className="eyebrow-dot" />
-              A smarter way to give tech a second life
-            </div>
-
-            <h1>
-              Give your old tech
-              <br />
-              <span>
-                a new <em>purpose.</em>
-              </span>
-            </h1>
-
-            <p>
-              Buy, sell, and reuse electronics with people around you.
-              EcoTrack makes responsible e-waste exchange simple,
-              transparent, and rewarding.
-            </p>
-
-            <div className="hero-actions">
-              <a href="#marketplace" className="primary-button">
-                Explore marketplace
-                <ArrowRight size={18} />
-              </a>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={handleSellClick}
-              >
-                <Plus size={18} />
-                List your e-waste
-              </button>
-            </div>
-
-            <div className="trust-row">
-              <div className="avatars">
-                <span>R</span>
-                <span>A</span>
-                <span>N</span>
-                <span>+</span>
-              </div>
-              <div>
-                <strong>Built for conscious communities</strong>
-                <small>Reuse more. Waste less.</small>
-              </div>
-            </div>
-          </div>
-
-          <div className="hero-art">
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-
-            <div className="device-card laptop-card">
-              <div className="device-top">
-                <span className="tiny-label">FEATURED DROP</span>
-                <span className="status-pill">● Available</span>
-              </div>
-              <div className="device-emoji">💻</div>
-              <div className="device-info">
-                <h3>MacBook Air M1</h3>
-                <p>8GB RAM · 256GB SSD</p>
-                <div>
-                  <strong>₹42,000</strong>
-                  <span>Good condition</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="floating-card impact-card">
-              <span className="floating-icon">♻</span>
-              <div>
-                <strong>2,480+</strong>
-                <small>Devices recirculated</small>
-              </div>
-            </div>
-
-            <div className="floating-card location-card">
-              <MapPin size={17} />
-              <div>
-                <strong>Find nearby</strong>
-                <small>Trusted local sellers</small>
-              </div>
-            </div>
-          </div>
-        </section>
+        <HeroSection onSellClick={handleSellClick} />
 
         {/* STATS */}
-        <section className="stats-strip" id="impact">
-          <div>
-            <strong>100%</strong>
-            <span>Community-driven</span>
-          </div>
-          <div>
-            <strong>6+</strong>
-            <span>Device categories</span>
-          </div>
-          <div>
-            <strong>₹11</strong>
-            <span>Simple platform fee</span>
-          </div>
-          <div>
-            <strong>1 goal</strong>
-            <span>Less e-waste</span>
-          </div>
-        </section>
+        <StatsSection />
 
         {/* MARKETPLACE */}
         <section className="market-section" id="marketplace">
@@ -2019,53 +2437,15 @@ function App() {
             <div className="empty-state">Loading live listings from EcoTrack...</div>
           ) : (
             <div className="product-grid">
-            {filteredProducts.map((product) => (
-              <article className="product-card" key={product.id}>
-                <div className={`product-visual ${product.color}`}>
-                  <span className="condition-tag">{product.condition}</span>
-
-                  <button
-                    className="like-button"
-                    onClick={() => toggleLike(product.id)}
-                    aria-label="Save listing"
-                  >
-                    <Heart
-                      size={18}
-                      fill={
-                        liked.includes(product.id) ? 'currentColor' : 'none'
-                      }
-                    />
-                  </button>
-
-                  <div className="product-icon">{product.icon}</div>
-                </div>
-
-                <div className="product-content">
-                  <div className="product-category">{product.category}</div>
-                  <h3>{product.title}</h3>
-
-                  <div className="product-meta">
-                    <MapPin size={14} />
-                    {product.location}
-                  </div>
-
-                  <div className="product-bottom">
-                    <div>
-                      <strong>{formatPrice(product.price)}</strong>
-                      <small>Seller: {product.seller}</small>
-                    </div>
-
-                    <button
-                      className="chat-button"
-                      onClick={() => setSelectedProduct(product)}
-                    >
-                      View Details
-                      <ArrowRight size={17} />
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  isLiked={liked.includes(product.id)}
+                  onToggleLike={toggleLike}
+                  onSelect={setSelectedProduct}
+                />
+              ))}
             </div>
           )}
 
@@ -2077,78 +2457,10 @@ function App() {
         </section>
 
         {/* HOW IT WORKS */}
-        <section className="how-section" id="how-it-works">
-          <div className="section-kicker">SIMPLE BY DESIGN</div>
-          <h2>
-            From unused to <span>useful.</span>
-          </h2>
-          <p className="section-intro">
-            A straightforward way to keep electronics in use for longer.
-          </p>
-
-          <div className="steps">
-            <div className="step">
-              <div className="step-icon">
-                <Plus />
-              </div>
-              <span>01</span>
-              <h3>List your device</h3>
-              <p>Add photos, specs, condition, and your asking price.</p>
-            </div>
-
-            <div className="step">
-              <div className="step-icon">
-                <MessageCircle />
-              </div>
-              <span>02</span>
-              <h3>Connect & agree</h3>
-              <p>Chat with interested buyers and finalize the deal.</p>
-            </div>
-
-            <div className="step">
-              <div className="step-icon">
-                <Truck />
-              </div>
-              <span>03</span>
-              <h3>We manage delivery</h3>
-              <p>Pay securely and track the delivery through EcoTrack.</p>
-            </div>
-
-            <div className="step">
-              <div className="step-icon">
-                <ShieldCheck />
-              </div>
-              <span>04</span>
-              <h3>Verify & complete</h3>
-              <p>Approve the product after delivery and release the seller payout.</p>
-            </div>
-          </div>
-        </section>
+        <HowItWorksSection />
 
         {/* SELL BANNER */}
-        <section className="sell-banner" id="sell">
-          <div>
-            <div className="section-kicker">HAVE UNUSED TECH?</div>
-            <h2>
-              Someone out there
-              <br />
-              needs what you have.
-            </h2>
-            <p>
-              Turn your unused electronics into value while helping reduce
-              e-waste.
-            </p>
-          </div>
-
-          <button
-            className="primary-button"
-            type="button"
-            onClick={handleSellClick}
-          >
-            Start selling
-            <ArrowRight size={18} />
-          </button>
-        </section>
+        <SellBannerSection onSellClick={handleSellClick} />
 
         {/* PRODUCT DETAILS MODAL */}
         {selectedProduct && (
@@ -2233,19 +2545,44 @@ function App() {
                       <Plus size={16} />
                       Edit this listing
                     </button>
-                    <button
-                      className="secondary-button modal-action"
-                      style={{ width: '100%', justifyContent: 'center', color: '#dc2626', borderColor: '#fecaca' }}
-                      onClick={() => {
-                        if (window.confirm('Are you sure you want to delete this listing?')) {
-                          deleteProduct(selectedProduct.id);
-                          closeDetails();
-                        }
-                      }}
-                    >
-                      <Trash2 size={16} />
-                      Delete this listing
-                    </button>
+                    {confirmDeleteProduct ? (
+                      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 14px', textAlign: 'center', marginTop: 4 }}>
+                        <p style={{ margin: '0 0 10px', fontSize: 13, color: '#991b1b', fontWeight: 600 }}>
+                          Are you sure you want to permanently delete this listing?
+                        </p>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            style={{ fontSize: 12, padding: '6px 14px' }}
+                            onClick={() => setConfirmDeleteProduct(false)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="primary-button"
+                            style={{ fontSize: 12, padding: '6px 14px', background: '#dc2626', borderColor: '#dc2626' }}
+                            onClick={() => {
+                              deleteProduct(selectedProduct.id);
+                              closeDetails();
+                            }}
+                          >
+                            Confirm Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="secondary-button modal-action"
+                        style={{ width: '100%', justifyContent: 'center', color: '#dc2626', borderColor: '#fecaca' }}
+                        onClick={() => setConfirmDeleteProduct(true)}
+                      >
+                        <Trash2 size={16} />
+                        Delete this listing
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -2475,24 +2812,46 @@ function App() {
                       </div>
 
                       {viewerRole === 'seller' && currentOffer.sender === 'buyer' && (
-                        <div className="offer-decision-buttons">
-                          <button
-                            className="accept-button"
-                            onClick={acceptOffer}
-                            disabled={negotiationStatus === 'accepted'}
-                          >
-                            <Check size={15} />
-                            Accept
-                          </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+                          <div className="offer-decision-buttons">
+                            <button
+                              type="button"
+                              className="accept-button"
+                              onClick={acceptOffer}
+                              disabled={negotiationStatus === 'accepted'}
+                            >
+                              <Check size={15} />
+                              Accept
+                            </button>
 
-                          <button
-                            className="reject-button"
-                            onClick={rejectOffer}
-                            disabled={negotiationStatus === 'accepted'}
-                          >
-                            <XCircle size={15} />
-                            Reject
-                          </button>
+                            <button
+                              type="button"
+                              className="reject-button"
+                              onClick={rejectOffer}
+                              disabled={negotiationStatus === 'accepted'}
+                            >
+                              <XCircle size={15} />
+                              Reject
+                            </button>
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                            <input
+                              type="number"
+                              min="1"
+                              value={sellerCounterAmount}
+                              onChange={(e) => setSellerCounterAmount(e.target.value)}
+                              placeholder="Counter ₹"
+                              style={{ width: 120, padding: '7px 10px', borderRadius: 8, border: '1px solid #d9e4dd', fontSize: 13 }}
+                            />
+                            <button
+                              type="button"
+                              className="counter-button"
+                              style={{ margin: 0, padding: '7px 14px', fontSize: 13 }}
+                              onClick={sendSellerCounter}
+                            >
+                              Send Counter
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -2609,10 +2968,12 @@ function App() {
                           type="number"
                           min="0"
                           max="5000"
-                          value={deliveryFee}
-                          onChange={(e) =>
-                            setDeliveryFee(clamp(Math.round(Number(e.target.value) || 0), 0, 5000))
-                          }
+                          value={deliveryFee === 0 ? '' : deliveryFee}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDeliveryFee(val === '' ? 0 : clamp(Math.round(Number(val) || 0), 0, 5000));
+                          }}
+                          placeholder="0"
                         />
                       </div>
                       <small>
@@ -2646,9 +3007,32 @@ function App() {
                       <div style={{ textAlign: 'center', padding: '16px 0', color: '#16a34a' }}>
                         <CheckCircle size={36} style={{ margin: '0 auto 8px', color: '#16a34a' }} />
                         <h3 style={{ margin: '0 0 6px', color: '#15803d' }}>Order Placed Successfully!</h3>
-                        <p style={{ margin: 0, fontSize: 13, color: '#4b5563' }}>
+                        <p style={{ margin: '0 0 14px', fontSize: 13, color: '#4b5563' }}>
                           Delivery order initiated. Funds held securely in escrow until received & approved.
                         </p>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            style={{ fontSize: 13 }}
+                            onClick={closeNegotiation}
+                          >
+                            Done
+                          </button>
+                          <button
+                            type="button"
+                            className="primary-button"
+                            style={{ fontSize: 13 }}
+                            onClick={() => {
+                              closeNegotiation();
+                              setShowOrdersPanel(true);
+                              if (isSupabaseConfigured) loadOrders();
+                            }}
+                          >
+                            <ShoppingCart size={15} />
+                            View in My Orders
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <button
@@ -2679,14 +3063,39 @@ function App() {
           }}
           onCreated={(savedProduct, isEdit) => {
             if (isEdit && savedProduct) {
-              setDbProducts((current) =>
-                current.map((p) => (p.id === savedProduct.id ? { ...p, ...savedProduct } : p))
-              );
+              // Update edited product in state and persist to sessionStorage (demo) or refetch (Supabase)
+              if (!isSupabaseConfigured) {
+                setDbProducts((current) => {
+                  const updated = current.map((p) =>
+                    p.id === savedProduct.id ? { ...p, ...savedProduct } : p
+                  );
+                  saveStoredDemo(DEMO_STORAGE_KEY_PRODUCTS, updated);
+                  return updated;
+                });
+              } else {
+                // Supabase: optimistic update then refetch to confirm
+                setDbProducts((current) =>
+                  current.map((p) => (p.id === savedProduct.id ? { ...p, ...savedProduct } : p))
+                );
+                loadProducts();
+              }
               setNotice(`Listing "${savedProduct.title}" updated successfully!`);
             } else if (savedProduct) {
-              setDbProducts((current) => [savedProduct, ...current]);
+              // New listing: add to state and persist to sessionStorage (demo) or refetch (Supabase)
+              if (!isSupabaseConfigured) {
+                setDbProducts((current) => {
+                  const updated = [savedProduct, ...current];
+                  saveStoredDemo(DEMO_STORAGE_KEY_PRODUCTS, updated);
+                  return updated;
+                });
+              } else {
+                // Supabase: optimistic add then refetch to get server-assigned fields
+                setDbProducts((current) => [savedProduct, ...current]);
+                loadProducts();
+              }
               setNotice(`Listing "${savedProduct.title}" created successfully!`);
             } else {
+              // Fallback: full refetch (Supabase path when insert returns null data)
               loadProducts();
             }
             setEditingProduct(null);
@@ -2694,38 +3103,77 @@ function App() {
         />
       )}
 
-      {showMessagesCenter && session?.user && profile && <MessagesCenter user={session.user} profile={profile} initialProduct={messagesStartProduct} onClose={() => { setShowMessagesCenter(false); setMessagesStartProduct(null); }} />}
+      {showMessagesCenter && session?.user && profile && (
+        <MessagesCenter
+          user={session.user}
+          profile={profile}
+          initialProduct={messagesStartProduct}
+          onClose={() => {
+            setShowMessagesCenter(false);
+            setMessagesStartProduct(null);
+          }}
+          onProceedToCheckout={handleProceedToCheckout}
+        />
+      )}
 
       {/* ORDERS PANEL */}
       {showOrdersPanel && session && (
-        <div className="messages-overlay">
-          <section className="messages-center">
+        <div className="messages-overlay" onClick={() => setShowOrdersPanel(false)}>
+          <section className="messages-center" onClick={(e) => e.stopPropagation()}>
             <header className="messages-topbar">
               <div>
                 <span className="messages-kicker">ECOTRACK ORDERS</span>
                 <h2><ShoppingCart size={22}/> My Orders</h2>
               </div>
-              <button className="chat-close" onClick={() => setShowOrdersPanel(false)} aria-label="Close orders"><X/></button>
+              <button
+                type="button"
+                onClick={() => setShowOrdersPanel(false)}
+                aria-label="Close My Orders"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '9px 18px',
+                  borderRadius: '12px',
+                  border: '1.5px solid #cbd5e1',
+                  background: '#f1f5f9',
+                  color: '#1e293b',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <ArrowLeft size={16} />
+                Back
+              </button>
             </header>
             <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
               {ordersLoading ? (
                 <p style={{ textAlign: 'center', color: '#64748b', padding: '40px 0' }}>Loading orders…</p>
-              ) : !isSupabaseConfigured ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-                  <ShoppingCart size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                  <h3 style={{ margin: '0 0 6px', color: '#334155' }}>Orders require database</h3>
-                  <p style={{ fontSize: 13 }}>Connect Supabase in <code>.env.local</code> to use the orders system. Demo mode uses simulated order placement only.</p>
-                </div>
               ) : orders.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
                   <Package size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                   <h3 style={{ margin: '0 0 6px', color: '#334155' }}>No orders yet</h3>
-                  <p style={{ fontSize: 13 }}>Orders will appear here after you place or receive one.</p>
+                  <p style={{ fontSize: 13, maxWidth: 440, margin: '0 auto 20px', lineHeight: 1.5 }}>
+                    {isSupabaseConfigured
+                      ? 'Orders will appear here after you place or receive one.'
+                      : 'In preview mode, complete a negotiation on any product and place an order to see its escrow lifecycle tracked here!'}
+                  </p>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    style={{ margin: '0 auto', fontSize: 13 }}
+                    onClick={() => setShowOrdersPanel(false)}
+                  >
+                    <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }} />
+                    Back to Marketplace
+                  </button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {orders.map(order => {
-                    const isBuyer = order.buyer_id === session.user.id;
+                    const isBuyer = session?.user?.id ? order.buyer_id === session.user.id : true;
                     const statusColors = {
                       awaiting_payment: '#d97706',
                       escrow_held: '#2563eb',
@@ -2769,8 +3217,9 @@ function App() {
                           <div><small style={{ color: '#94a3b8', display: 'block' }}>Seller payout</small><strong>{formatPrice(order.seller_payout)}</strong></div>
                           <div><small style={{ color: '#94a3b8', display: 'block' }}>Platform fee</small><strong>{formatPrice(order.platform_fee)}</strong></div>
                         </div>
-                        {isBuyer && order.status === 'delivered' && !order.buyer_approved && (
+                        {((isBuyer && order.status === 'delivered' && !order.buyer_approved) || (!isSupabaseConfigured && order.status === 'escrow_held')) && (
                           <button
+                            type="button"
                             className="primary-button"
                             style={{ marginTop: 12, width: '100%', justifyContent: 'center', fontSize: 13 }}
                             onClick={() => markBuyerApproved(order)}
@@ -2797,26 +3246,7 @@ function App() {
       )}
 
       {/* FOOTER */}
-      <footer>
-        <div className="footer-top">
-          <a className="brand" href="#top">
-            <span className="brand-mark">
-              <Recycle size={20} />
-            </span>
-            <span>
-              Eco<span className="brand-accent">Track</span>
-            </span>
-          </a>
-          <nav className="footer-links">
-            <a href="#marketplace">Marketplace</a>
-            <a href="#how-it-works">How it works</a>
-            <a href="#impact">Impact</a>
-            <a href="#sell">Sell</a>
-          </nav>
-        </div>
-        <p>Building a more circular future, one device at a time.</p>
-        <span>© 2026 EcoTrack · Sustainable Electronics Marketplace</span>
-      </footer>
+      <FooterSection />
     </div>
   );
 }
